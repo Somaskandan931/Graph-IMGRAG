@@ -1,0 +1,86 @@
+# ============================================================
+#  graph-imgrag-coco  |  .gitignore
+# ============================================================
+
+# ── Python ────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+pip-wheel-metadata/
+
+# ── Virtual environments ──────────────────────────────────
+venv/
+.venv/
+env/
+.env/
+ENV/
+
+# ── COCO Dataset (large files — do not commit) ────────────
+dataset/raw/
+dataset/processed/images/
+dataset/processed/ocr_text/
+dataset/annotations/*.zip
+dataset/annotations/instances_*.json
+dataset/annotations/coco_meta.json
+
+# ── Pipeline outputs ──────────────────────────────────────
+outputs/embeddings/
+outputs/graphs/
+outputs/retrieval_results/
+
+# ── Model cache (sentence-transformers / EasyOCR) ─────────
+.cache/
+models/
+~/.EasyOCR/
+*.pt
+*.pth
+*.bin
+*.onnx
+
+# ── Jupyter ───────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ── IDE / editors ─────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# ── OS ────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Logs ──────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Secrets / env files ───────────────────────────────────
+.env
+.env.*
+secrets.yaml
+secrets.json
+
+# ── Pytest / coverage ─────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# ── Streamlit ─────────────────────────────────────────────
+.streamlit/secrets.toml
+
+# ── Misc ──────────────────────────────────────────────────
+*.part
+*.tmp
+*.bak

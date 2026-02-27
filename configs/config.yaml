@@ -1,0 +1,75 @@
+# ============================================================
+#  graph-imgrag | Configuration — COCO Dataset Edition
+# ============================================================
+
+dataset:
+  # Directory where COCO images will be stored after download
+  raw_dir:       dataset/raw
+  processed_dir: dataset/processed/images
+  ocr_text_dir:  dataset/processed/ocr_text
+  annotations_dir: dataset/annotations
+
+  # COCO download settings
+  coco_year: "2017"
+  # Which COCO splits to use — val2017 is recommended (5,000 images, ~1 GB)
+  # Options: "train2017" (~18 GB), "val2017" (~1 GB), "test2017" (~6 GB)
+  coco_split: "val2017"
+
+  # Maximum images to load from COCO (set null to load all 5000)
+  max_images: 500
+
+  # COCO supercategories used as pipeline categories
+  categories:
+    - person
+    - vehicle
+    - outdoor
+    - animal
+    - accessory
+    - sports
+    - kitchen
+    - food
+    - furniture
+    - electronic
+    - appliance
+    - indoor
+
+ocr:
+  languages: ["en"]
+  gpu: false
+  paragraph: true
+
+embeddings:
+  model: "all-MiniLM-L6-v2"
+  batch_size: 32
+  normalize: true
+  output_file: outputs/embeddings/image_embeddings.pkl
+
+graph:
+  knn_k: 5
+  output_file: outputs/graphs/similarity_graph.gpickle
+  output_gexf: outputs/graphs/similarity_graph.gexf
+  output_png:  outputs/graphs/similarity_graph.png
+
+retrieval:
+  top_k: 5
+  expand_graph: true
+  expansion_depth: 2
+  results_dir: outputs/retrieval_results
+
+evaluation:
+  k: 5
+  queries:
+    person:      "person people man woman child portrait crowd"
+    vehicle:     "car truck bus motorcycle bicycle vehicle road"
+    outdoor:     "street sign traffic outdoor road scene"
+    animal:      "dog cat bird horse elephant animal wildlife"
+    sports:      "sports ball player court field stadium game"
+    food:        "food pizza sandwich banana cake meal plate"
+    furniture:   "chair table sofa couch bed desk furniture"
+    electronic:  "laptop phone tv screen computer monitor"
+    kitchen:     "bowl cup fork spoon knife kitchen utensil"
+    indoor:      "book clock vase scissors indoor room"
+
+app:
+  title: "Graph-Based Image Retrieval — COCO Dataset"
+  port: 8501
