@@ -38,19 +38,59 @@ COCO_IMG_BASE = "http://images.cocodataset.org/{split}/{filename}"
 
 # ── Annotation helpers ────────────────────────────────────────────────────────
 
-def _download_file(url: str, dest: str):
-    """Download url → dest with a progress callback."""
-    log.info(f"  Downloading {url}")
+def _download_file(url: str, dest: str, retries: int = 3):
+    """Download url → dest with progress, retries, and size validation."""
+    import time
     ensure_dirs(os.path.dirname(dest))
 
-    def _progress(block_num, block_size, total_size):
-        done = block_num * block_size
-        if total_size > 0:
-            pct = min(100, done * 100 // total_size)
-            print(f"\r    {pct:3d}%  {done // 1024:7d} KB", end="", flush=True)
+    for attempt in range(1, retries + 1):
+        log.info(f"  Downloading (attempt {attempt}/{retries}): {url}")
 
-    urllib.request.urlretrieve(url, dest, _progress)
-    print()
+        def _progress(block_num, block_size, total_size):
+            done = block_num * block_size
+            if total_size > 0:
+                pct = min(100, done * 100 // total_size)
+                print(f"\r    {pct:3d}%  {done // 1_048_576:.1f} MB", end="", flush=True)
+
+        try:
+            tmp = dest + ".part"
+            urllib.request.urlretrieve(url, tmp, _progress)
+            print()
+            # Validate: must be at least 1 KB
+            if os.path.getsize(tmp) < 1024:
+                raise ValueError(f"Downloaded file too small ({os.path.getsize(tmp)} bytes) — likely a redirect/error page")
+            os.replace(tmp, dest)
+            log.info(f"  Saved → {dest}  ({os.path.getsize(dest) // 1_048_576} MB)")
+            return
+        except Exception as e:
+            print()
+            log.warning(f"  Download attempt {attempt} failed: {e}")
+            # Remove any partial file
+            for f in [dest, dest + ".part"]:
+                if os.path.exists(f):
+                    os.remove(f)
+            if attempt < retries:
+                log.info(f"  Retrying in 3 s ...")
+                time.sleep(3)
+
+    raise RuntimeError(
+        f"Failed to download {url} after {retries} attempts.\n"
+        f"  Please download manually and place at: {dest}\n"
+        f"  Direct link: {url}"
+    )
+
+
+def _is_valid_zip(path: str) -> bool:
+    """Return True if path exists and is a valid zip file."""
+    import zipfile
+    if not os.path.exists(path):
+        return False
+    try:
+        with zipfile.ZipFile(path, "r") as zf:
+            zf.testzip()
+        return True
+    except Exception:
+        return False
 
 
 def _ensure_annotations(cfg: dict) -> str:
@@ -58,8 +98,10 @@ def _ensure_annotations(cfg: dict) -> str:
     Download and unzip COCO annotation file if not present.
     Returns path to the instances JSON file.
     """
-    year  = cfg["dataset"]["coco_year"]
-    split = cfg["dataset"]["coco_split"]
+    import zipfile
+
+    year    = cfg["dataset"]["coco_year"]
+    split   = cfg["dataset"]["coco_split"]
     ann_dir = cfg["dataset"]["annotations_dir"]
     ensure_dirs(ann_dir)
 
@@ -68,15 +110,27 @@ def _ensure_annotations(cfg: dict) -> str:
         log.info(f"  Annotations already present: {instances_json}")
         return instances_json
 
-    # Download zip
     zip_url  = COCO_ANN_URL.format(year=year)
     zip_dest = os.path.join(ann_dir, f"annotations_trainval{year}.zip")
+
+    # Remove corrupt zip if it exists
+    if os.path.exists(zip_dest) and not _is_valid_zip(zip_dest):
+        log.warning(f"  Corrupt/incomplete zip found — deleting and re-downloading: {zip_dest}")
+        os.remove(zip_dest)
+
     if not os.path.exists(zip_dest):
         log.info("Downloading COCO annotations (~241 MB) ...")
         _download_file(zip_url, zip_dest)
 
-    # Unzip (extracts to ann_dir/annotations/)
-    import zipfile
+    # Final validation before unzipping
+    if not _is_valid_zip(zip_dest):
+        os.remove(zip_dest)
+        raise RuntimeError(
+            f"Annotation zip is still corrupt after download.\n"
+            f"Please download it manually from:\n  {zip_url}\n"
+            f"and save it to:\n  {zip_dest}"
+        )
+
     log.info("Unzipping annotations ...")
     with zipfile.ZipFile(zip_dest, "r") as zf:
         zf.extractall(ann_dir)
@@ -87,6 +141,13 @@ def _ensure_annotations(cfg: dict) -> str:
         shutil.move(extracted, instances_json)
         shutil.rmtree(os.path.join(ann_dir, "annotations"), ignore_errors=True)
 
+    if not os.path.exists(instances_json):
+        raise RuntimeError(
+            f"Unzip succeeded but instances JSON not found at: {instances_json}\n"
+            f"Check the zip contents in: {ann_dir}"
+        )
+
+    log.info(f"  Annotations ready: {instances_json}")
     return instances_json
 
 
