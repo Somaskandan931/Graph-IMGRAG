@@ -15,6 +15,7 @@ import os, sys, pickle, argparse
 sys.path.insert(0, os.path.abspath(os.path.join(__file__, "../../..")))
 
 import numpy as np
+import networkx as nx
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -202,7 +203,6 @@ def evaluate(image_paths, embeddings, G, labels, cfg):
 
 
 def nx_density(G):
-    import networkx as nx
     return nx.density(G)
 
 

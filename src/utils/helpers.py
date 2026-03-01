@@ -27,8 +27,13 @@ def get_logger(name: str) -> logging.Logger:
 def load_config(path: str = "configs/config.yaml") -> dict:
     """Load YAML config. Looks in project root automatically."""
     # Handle running from any subdirectory
-    candidates = [path, os.path.join(os.path.dirname(__file__), "../../", path)]
+    candidates = [
+        path,
+        os.path.join(os.path.dirname(__file__), "../../", path),
+        os.path.join(os.path.dirname(__file__), "../../../", path),
+    ]
     for p in candidates:
+        p = os.path.normpath(p)
         if os.path.exists(p):
             with open(p) as f:
                 return yaml.safe_load(f)
