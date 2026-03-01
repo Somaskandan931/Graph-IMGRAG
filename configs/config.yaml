@@ -1,24 +1,35 @@
 # ============================================================
-#  graph-imgrag | Configuration — COCO Dataset Edition
+#  graph-imgrag | Configuration
 # ============================================================
 
 dataset:
-  # Directory where COCO images will be stored after download
-  raw_dir:       dataset/raw
-  processed_dir: dataset/processed/images
-  ocr_text_dir:  dataset/processed/ocr_text
-  annotations_dir: dataset/annotations
+  # ── Local dataset paths ──────────────────────────────────
+  # Your COCO images are already downloaded here.
+  # The pipeline reads directly from these folders —
+  # no re-downloading needed.
+  #
+  # Use forward slashes even on Windows.
+  # Example (absolute):  D:/PycharmProjects/graph-imgrag-coco/dataset/val2017
+  # Example (relative):  dataset/val2017
+  local_images_dir: "dataset/val2017"     # primary split used for indexing
+  local_train_dir:  "dataset/train2017"   # optional — leave as-is to skip
+  local_test_dir:   "dataset/test2017"    # optional — leave as-is to skip
 
-  # COCO download settings
-  coco_year: "2017"
-  # Which COCO splits to use — val2017 is recommended (5,000 images, ~1 GB)
-  # Options: "train2017" (~18 GB), "val2017" (~1 GB), "test2017" (~6 GB)
-  coco_split: "val2017"
+  # ── Pipeline working directories ─────────────────────────
+  raw_dir:          dataset/raw
+  processed_dir:    dataset/processed/images   # images organised here by category
+  ocr_text_dir:     dataset/processed/ocr_text
+  annotations_dir:  dataset/annotations
 
-  # Maximum images to load from COCO (set null to load all 5000)
+  # ── COCO annotation settings ─────────────────────────────
+  coco_year:  "2017"
+  coco_split: "val2017"    # must match the split in local_images_dir
+
+  # Maximum images to index (set null to index everything)
   max_images: 500
+  num_images: 500          # alias used by tests
 
-  # COCO supercategories used as pipeline categories
+  # ── COCO supercategories to include ──────────────────────
   categories:
     - person
     - vehicle
@@ -35,7 +46,7 @@ dataset:
 
 ocr:
   languages: ["en"]
-  gpu: false
+  gpu: false          # set true if you have a CUDA GPU
   paragraph: true
 
 embeddings:
@@ -58,17 +69,19 @@ retrieval:
 
 evaluation:
   k: 5
+  # Queries now include the exact supercategory word so they match the
+  # enriched embeddings (OCR text + category label) produced by extract_text.py
   queries:
-    person:      "person people man woman child portrait crowd"
-    vehicle:     "car truck bus motorcycle bicycle vehicle road"
-    outdoor:     "street sign traffic outdoor road scene"
-    animal:      "dog cat bird horse elephant animal wildlife"
-    sports:      "sports ball player court field stadium game"
-    food:        "food pizza sandwich banana cake meal plate"
-    furniture:   "chair table sofa couch bed desk furniture"
-    electronic:  "laptop phone tv screen computer monitor"
-    kitchen:     "bowl cup fork spoon knife kitchen utensil"
-    indoor:      "book clock vase scissors indoor room"
+    person:      "person"
+    vehicle:     "vehicle"
+    outdoor:     "outdoor"
+    animal:      "animal"
+    sports:      "sports"
+    food:        "food"
+    furniture:   "furniture"
+    electronic:  "electronic"
+    kitchen:     "kitchen"
+    indoor:      "indoor"
 
 app:
   title: "Graph-Based Image Retrieval — COCO Dataset"

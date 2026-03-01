@@ -161,8 +161,11 @@ def evaluate(image_paths, embeddings, G, labels, cfg):
         qvec         = model.encode([qtext], normalize_embeddings=True)
         sims         = cosine_similarity(qvec, embeddings)[0]
         top_idx      = np.argsort(sims)[::-1][:k]
+        # Match by folder name (supercategory) — works for both COCO meta
+        # cache and folder-organised images
         relevant     = {i for i, p in enumerate(image_paths)
-                        if get_category(p) == cat}
+                        if get_category(p) == cat
+                        or Path(p).parent.name == cat}
         total        = len(relevant)
         ret_rel      = [i for i in top_idx if i in relevant]
         p  = len(ret_rel) / k

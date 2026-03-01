@@ -22,10 +22,10 @@ from src.utils.helpers import (
 # ── Config ─────────────────────────────────────────────────────────────────
 def test_config_loads():
     cfg = load_config()
-    assert cfg["dataset"]["num_images"] == 170
+    assert cfg["dataset"]["num_images"] == 500
     assert cfg["graph"]["knn_k"] == 5
     assert cfg["embeddings"]["model"] == "all-MiniLM-L6-v2"
-    assert len(cfg["dataset"]["categories"]) == 5
+    assert len(cfg["dataset"]["categories"]) == 12
     print("PASS: config loads correctly")
 
 

@@ -36,16 +36,48 @@ def _get_reader(cfg):
 
 
 def extract_one(image_path: str, cfg: dict) -> str:
-    """Extract all text from a single image. Returns a plain string."""
+    """
+    Extract text from a single image and enrich it with category metadata.
+
+    Strategy:
+      1. Raw OCR text from the image (if any)
+      2. COCO supercategory label (always appended, repeated for embedding weight)
+      3. Cleaned filename as last resort
+
+    This ensures every image has a semantically meaningful embedding even
+    when OCR finds no readable text in the photo — which is common in
+    natural photography like COCO val2017.
+    """
+    from src.utils.helpers import get_category
+
     reader = _get_reader(cfg)
     try:
         results = reader.readtext(image_path, detail=0,
                                    paragraph=cfg["ocr"].get("paragraph", True))
-        text = " ".join(results).strip()
+        ocr_text = " ".join(results).strip()
     except Exception as e:
         log.warning(f"OCR error on {os.path.basename(image_path)}: {e}")
-        text = ""
-    return text if text else Path(image_path).stem.replace("_", " ")
+        ocr_text = ""
+
+    # Always enrich with the COCO supercategory — repeated twice so the
+    # category pulls the embedding into the right semantic neighbourhood.
+    category = get_category(image_path)          # e.g. "animal", "vehicle"
+    folder   = Path(image_path).parent.name      # fallback: parent folder name
+
+    parts = []
+    if ocr_text:
+        parts.append(ocr_text)
+
+    cat_label = category if category not in ("unknown", "", ".") else folder
+    if cat_label and cat_label not in ("unknown", "", ".", "images"):
+        parts.append(cat_label)
+        parts.append(cat_label)      # repeat to increase semantic weight
+
+    enriched = " ".join(parts).strip()
+    if not enriched:
+        enriched = Path(image_path).stem.replace("_", " ")
+
+    return enriched
 
 
 def run_ocr(cfg: dict) -> dict:

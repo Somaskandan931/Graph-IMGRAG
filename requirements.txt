@@ -17,3 +17,4 @@ pyvis>=0.3.2
 
 # COCO (annotation parsing — optional, we use stdlib json directly)
 # pycocotools>=2.0.6   # uncomment if you need mask/polygon support
+python-dotenv>=1.0.0

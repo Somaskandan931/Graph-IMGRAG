@@ -1,84 +1,118 @@
 """
 src/utils/helpers.py
-Shared utility functions used across the entire project.
+Shared utilities for the graph-imgrag pipeline.
 """
 
 import os
+import sys
 import json
-import pickle
 import logging
-import yaml
+import pickle
 from pathlib import Path
 
+import yaml
+import numpy as np
+
+# ── COCO metadata cache (populated by coco_loader) ────────────────────────────
+_COCO_META: dict = {}   # {image_path: supercategory}
+
+def set_coco_meta(meta: dict):
+    global _COCO_META
+    _COCO_META = meta
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 
 def get_logger(name: str) -> logging.Logger:
-    logging.basicConfig(
-        format="%(asctime)s [%(levelname)-8s] %(name)s — %(message)s",
-        datefmt="%H:%M:%S",
-        level=logging.INFO,
-    )
-    return logging.getLogger(name)
+    logger = logging.getLogger(name)
+    if not logger.handlers:
+        handler = logging.StreamHandler(sys.stdout)
+        fmt = logging.Formatter(
+            "[%(asctime)s] %(levelname)-7s  %(name)s  %(message)s",
+            datefmt="%H:%M:%S",
+        )
+        handler.setFormatter(fmt)
+        logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+    return logger
 
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-def load_config(path: str = "configs/config.yaml") -> dict:
-    """Load YAML config. Looks in project root automatically."""
-    # Handle running from any subdirectory
-    candidates = [
-        path,
-        os.path.join(os.path.dirname(__file__), "../../", path),
-        os.path.join(os.path.dirname(__file__), "../../../", path),
+def load_config(path: str = None) -> dict:
+    """Load YAML config. Searches standard locations if path is not given."""
+    _here = os.path.dirname(os.path.abspath(__file__))
+    _root = os.path.normpath(os.path.join(_here, "../../.."))
+    candidates = ([path] if path else []) + [
+        "configs/config.yaml",
+        "config.yaml",
+        os.path.join(_root, "configs", "config.yaml"),
+        os.path.join(_root, "config.yaml"),
+        os.path.join("..", "configs", "config.yaml"),
+        os.path.join("..", "config.yaml"),
     ]
     for p in candidates:
-        p = os.path.normpath(p)
-        if os.path.exists(p):
+        if p and os.path.exists(p):
             with open(p) as f:
                 return yaml.safe_load(f)
-    raise FileNotFoundError(f"Config not found: {path}")
+    raise FileNotFoundError(
+        "config.yaml not found. Searched:\n" +
+        "\n".join(f"  {os.path.abspath(p)}" for p in candidates if p)
+    )
 
 
-# ── Directory helpers ─────────────────────────────────────────────────────────
+# ── Directories ───────────────────────────────────────────────────────────────
 
-def ensure_dirs(*paths):
-    for p in paths:
-        if p:
-            os.makedirs(p, exist_ok=True)
+def ensure_dirs(*dirs):
+    """Create directories (and parents) if they do not already exist."""
+    for d in dirs:
+        if d:
+            os.makedirs(d, exist_ok=True)
 
 
 # ── Image collection ──────────────────────────────────────────────────────────
 
-def collect_images(directory: str) -> list:
-    """Recursively find all jpg/png images under directory."""
-    exts = {".jpg", ".jpeg", ".png"}
-    images = []
-    for root, _, files in os.walk(directory):
-        for f in sorted(files):
-            if Path(f).suffix.lower() in exts:
-                images.append(os.path.join(root, f))
-    return sorted(images)
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff", ".webp"}
+
+def collect_images(root: str) -> list:
+    """
+    Recursively collect all image files under *root*.
+    Returns a sorted list of absolute paths.
+    """
+    found = []
+    for dirpath, _, filenames in os.walk(root):
+        for fn in filenames:
+            if Path(fn).suffix.lower() in IMAGE_EXTS:
+                found.append(os.path.join(dirpath, fn))
+    return sorted(found)
 
 
-# ── File I/O ──────────────────────────────────────────────────────────────────
+# ── JSON helpers ──────────────────────────────────────────────────────────────
 
-def save_json(data, path: str):
+def save_json(data, path: str, indent: int = 2):
     ensure_dirs(os.path.dirname(path))
     with open(path, "w") as f:
-        json.dump(data, f, indent=2)
+        json.dump(data, f, indent=indent, default=_json_default)
 
+def _json_default(obj):
+    if isinstance(obj, np.integer):
+        return int(obj)
+    if isinstance(obj, np.floating):
+        return float(obj)
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    raise TypeError(f"Object of type {type(obj)} is not JSON serialisable")
 
-def load_json(path: str) -> dict:
+def load_json(path: str):
     with open(path) as f:
         return json.load(f)
 
+
+# ── Pickle helpers ────────────────────────────────────────────────────────────
 
 def save_pickle(obj, path: str):
     ensure_dirs(os.path.dirname(path))
     with open(path, "wb") as f:
         pickle.dump(obj, f)
-
 
 def load_pickle(path: str):
     with open(path, "rb") as f:
@@ -87,26 +121,36 @@ def load_pickle(path: str):
 
 # ── Path helpers ──────────────────────────────────────────────────────────────
 
-# Optional COCO metadata cache: {image_path: supercategory}
-_coco_meta_cache: dict = {}
-
-def set_coco_meta(meta: dict):
-    """Populate the COCO metadata cache so get_category() can use it."""
-    global _coco_meta_cache
-    _coco_meta_cache = meta
+def stem(path: str) -> str:
+    """Return the filename stem (no extension) for *path*."""
+    return Path(path).stem
 
 
 def get_category(image_path: str) -> str:
     """
     Return the supercategory for an image.
-    Prefers COCO metadata (if loaded via set_coco_meta) and falls back
-    to the parent folder name, which is the COCO supercategory when images
-    are organised by load_coco_dataset().
+
+    Priority:
+      1. COCO metadata cache (set by coco_loader)
+      2. Parent directory name (folder-based categories)
+      3. 'unknown'
     """
-    if _coco_meta_cache and image_path in _coco_meta_cache:
-        return _coco_meta_cache[image_path]
-    return Path(image_path).parent.name
+    # Normalise path for lookup
+    norm = os.path.normpath(image_path)
+    if _COCO_META:
+        # Try exact match first
+        if norm in _COCO_META:
+            return _COCO_META[norm]
+        # Try with forward slashes
+        fwd = image_path.replace("\\", "/")
+        if fwd in _COCO_META:
+            return _COCO_META[fwd]
+        # Try matching by filename
+        fname = os.path.basename(image_path)
+        for k, v in _COCO_META.items():
+            if os.path.basename(k) == fname:
+                return v
 
-
-def stem(path: str) -> str:
-    return Path(path).stem
+    # Fall back: use parent folder name
+    parent = Path(image_path).parent.name
+    return parent if parent not in ("", ".", "images") else "unknown"
